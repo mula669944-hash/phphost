@@ -118,6 +118,7 @@ install_server() {
 
     echo -e "${YELLOW}[>] STEP 7/8:${RESET} Configuring Apache Routing & VHost..."
     mkdir -p /var/www/html/$MY_FOLDER
+    mkdir -p /var/www/html/$MY_FOLDER/TelegramBotHost
     APP_PORT=${PORT:-80}
     echo "Listen $APP_PORT" > /etc/apache2/ports.conf
 
@@ -128,6 +129,7 @@ install_server() {
     # সেভ ডোমেন ও ফোল্ডার ইনফো ফর ফিউচার চেঞ্জ
     echo "MY_FOLDER=$MY_FOLDER" > /etc/rrhost.conf
     echo "DB_USER=$DB_USER" >> /etc/rrhost.conf
+    echo "MY_DOMAIN=$MY_DOMAIN" >> /etc/rrhost.conf
 
     cat << EOF > /etc/apache2/sites-available/000-default.conf
 <VirtualHost *:$APP_PORT>
@@ -254,12 +256,11 @@ reset_db_pass() {
 }
 
 # ====================================================================
-# 🤖 FEATURE 5: DEPLOY & RUN TELEGRAM BOT (NEW!)
+# 🤖 FEATURE 5: DEPLOY & RUN TELEGRAM BOT
 # ====================================================================
 deploy_telegram_bot() {
     echo -e "${YELLOW}${BOLD}[*] Telegram Bot Automated Runner:${RESET}\n"
 
-    # কনফিগার ফাইল থেকে ফোল্ডার নেম রিড করা (না থাকলে ডিফল্ট mango ধরবে)
     if [ -f /etc/rrhost.conf ]; then
         source /etc/rrhost.conf
     fi
@@ -284,12 +285,12 @@ deploy_telegram_bot() {
         pip install --upgrade pip > /dev/null 2>&1
         pip install -r requirements.txt
     else
-        echo -e "${YELLOW}[>] requirements.txt not found. Installing standard libraries...${RESET}"
+        echo -e "${YELLOW}[>] Installing standard libraries...${RESET}"
         pip install --upgrade pip > /dev/null 2>&1
-        pip install pyrogram tgcrypto python-telegram-bot apscheduler requests
+        pip install pyrogram tgcrypto python-telegram-bot apscheduler requests > /dev/null 2>&1 || true
     fi
 
-    # পুরানো কোনো বট প্রসেস চললে কিল করে দেওয়া
+    # পুরানো কোনো বট চললে বন্ধ করা
     pkill -f main.py 2>/dev/null || true
 
     echo -e "${YELLOW}[>] Starting Bot in background...${RESET}"
@@ -297,17 +298,57 @@ deploy_telegram_bot() {
 
     echo ""
     echo -e "${GREEN}══════════════════════════════════════════════════════════════${RESET}"
-    echo -e "${GREEN}${BOLD}✔ Telegram Bot Successfully Deployed & Running!${RESET}"
+    echo -e "${GREEN}${BOLD}✔ Telegram Bot Successfully Started!${RESET}"
     echo -e "📁 Path : ${CYAN}$BOT_DIR${RESET}"
     echo -e "📄 Log  : ${CYAN}$BOT_DIR/bot.log${RESET}"
     echo -e "${GREEN}══════════════════════════════════════════════════════════════${RESET}\n"
-    
+
+    # নিশ্চিত করা Apache এবং MySQL ব্যাকগ্রাউন্ডে চলছে কিনা
+    service mariadb status >/dev/null 2>&1 || service mariadb start >/dev/null 2>&1
+    service apache2 status >/dev/null 2>&1 || service apache2 start >/dev/null 2>&1
+
     echo -e "${CYAN}[?] Do you want to view live logs? (y/n): ${GREEN}"
     read -r VIEW_LOG
     if [[ "$VIEW_LOG" =~ ^([yY][eE][sS]|[yY])$ ]]; then
         tail -f bot.log
     fi
     exit 0
+}
+
+# ====================================================================
+# ⚡ FEATURE 6: START ALL SERVERS (FULL ENGINE RUNNER)
+# ====================================================================
+start_all_services() {
+    echo -e "${YELLOW}${BOLD}[*] Starting All Services (Apache, MariaDB & Bot)...${RESET}\n"
+
+    # ১. ডেটাবেস স্টার্ট
+    echo -e "${YELLOW}[>] Starting MariaDB...${RESET}"
+    service mariadb restart > /dev/null 2>&1
+
+    # ২. টেলিগ্রাম বট স্টার্ট (যদি থাকে)
+    if [ -f /etc/rrhost.conf ]; then
+        source /etc/rrhost.conf
+    fi
+    MY_FOLDER=${MY_FOLDER:-mango}
+    BOT_DIR="/var/www/html/$MY_FOLDER/TelegramBotHost"
+
+    if [ -f "$BOT_DIR/main.py" ]; then
+        echo -e "${YELLOW}[>] Starting Telegram Bot...${RESET}"
+        cd "$BOT_DIR"
+        source venv/bin/activate 2>/dev/null || true
+        pkill -f main.py 2>/dev/null || true
+        nohup python3 main.py > bot.log 2>&1 &
+        echo -e "${GREEN}✔ Bot Started in background!${RESET}"
+    fi
+
+    # ৩. Apache চালু করা Foreground মোডে (যাতে Railway সার্ভার অফ না হয়)
+    echo -e "${YELLOW}[>] Launching Apache Server in Foreground...${RESET}"
+    echo -e "${GREEN}══════════════════════════════════════════════════════════════${RESET}"
+    echo -e "${GREEN}${BOLD}✔ All Services (Apache, DB, Bot) are now ONLINE!${RESET}"
+    echo -e "${CYAN}══════════════════════════════════════════════════════════════${RESET}\n"
+    
+    rm -f /var/run/apache2/apache2.pid
+    exec apache2ctl -D FOREGROUND
 }
 
 # ====================================================================
@@ -321,9 +362,10 @@ echo -e "   ${YELLOW}[2]${RESET} Change Domain Name        ${WHITE}(Instant 2-Se
 echo -e "   ${CYAN}[3]${RESET} Reset DB Password         ${WHITE}(Change MySQL Pass)${RESET}"
 echo -e "   ${MAGENTA}[4]${RESET} Restart Engine            ${WHITE}(Reboot Apache & MySQL)${RESET}"
 echo -e "   ${BLUE}[5]${RESET} Deploy & Run Telegram Bot ${WHITE}(Auto venv & Run main.py)${RESET}"
+echo -e "   ${GREEN}${BOLD}[6]${RESET} Start All Servers         ${BOLD}${WHITE}(Apache + DB + Bot Foreground)${RESET}"
 echo -e "   ${RED}[0]${RESET} Exit"
 echo ""
-echo -en "${CYAN}[?] Choose option [0-5]: ${GREEN}"
+echo -en "${CYAN}[?] Choose option [0-6]: ${GREEN}"
 read -r CHOICE
 echo -e "${RESET}"
 
@@ -345,6 +387,9 @@ case $CHOICE in
         ;;
     5)
         deploy_telegram_bot
+        ;;
+    6)
+        start_all_services
         ;;
     0)
         echo -e "${RED}[*] Exiting installer. Goodbye!${RESET}"
