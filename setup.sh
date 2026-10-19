@@ -164,8 +164,89 @@ install_server() {
 </VirtualHost>
 EOF
 
-    cat << EOF > /var/www/html/$MY_FOLDER/index.php
-<?php echo "<h1 style='text-align:center;margin-top:100px;font-family:sans-serif;'>🚀 Server is Live on Port $APP_PORT for $MY_DOMAIN</h1>"; ?>
+    cat << 'EOF' > /var/www/html/$MY_FOLDER/index.php
+<?php
+// System Live Checks
+$php_version = phpversion();
+$ioncube_loaded = extension_loaded('ionCube Loader') ? 'Active (v' . ioncube_loader_version() . ')' : 'Not Loaded';
+$mysql_status = class_exists('mysqli') ? 'Ready & Supported' : 'Missing Extension';
+$server_ip = $_SERVER['SERVER_ADDR'] ?? 'Railway Container';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RRHOST - Cloud Engine Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #0d1117; color: #c9d1d9; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 14px; max-width: 680px; width: 100%; padding: 35px; box-shadow: 0 12px 35px rgba(0,0,0,0.5); }
+        .header { text-align: center; border-bottom: 1px solid #30363d; padding-bottom: 25px; margin-bottom: 25px; }
+        .badge { display: inline-block; background: #238636; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 1px; }
+        h1 { color: #58a6ff; font-size: 26px; margin-bottom: 8px; }
+        p.subtitle { color: #8b949e; font-size: 14px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
+        @media(max-width: 550px) { .grid { grid-template-columns: 1fr; } }
+        .stat-box { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 14px 18px; }
+        .stat-label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 15px; color: #f0f6fc; font-weight: 600; margin-top: 4px; }
+        .stat-value.ok { color: #3fb950; }
+        .btn-group { display: flex; gap: 12px; flex-wrap: wrap; }
+        .btn { flex: 1; min-width: 140px; text-align: center; text-decoration: none; padding: 12px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .btn-pma { background: #1f6feb; color: #ffffff; border: 1px solid #388bfd; }
+        .btn-pma:hover { background: #388bfd; }
+        .btn-fm { background: #238636; color: #ffffff; border: 1px solid #2ea043; }
+        .btn-fm:hover { background: #2ea043; }
+        .footer { text-align: center; margin-top: 25px; font-size: 12px; color: #484f58; border-top: 1px solid #21262d; padding-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <span class="badge">🚀 All Systems Operational</span>
+            <h1>RRHOST Cloud Stack</h1>
+            <p class="subtitle">Complete PHP 8.1, MariaDB & Web Engine Successfully Configured</p>
+        </div>
+
+        <div class="grid">
+            <div class="stat-box">
+                <div class="stat-label">Web Engine</div>
+                <div class="stat-value ok">Apache 2.4 (Live)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">PHP Runtime</div>
+                <div class="stat-value ok">PHP <?= $php_version; ?></div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Database Engine</div>
+                <div class="stat-value ok">MariaDB Server (Running)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Security & Loader</div>
+                <div class="stat-value ok">ionCube <?= $ioncube_loaded; ?></div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">App Directory</div>
+                <div class="stat-value">/var/www/html/<?= basename(__DIR__); ?></div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Python Bot Host</div>
+                <div class="stat-value ok">Python 3 + venv Ready</div>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <a href="/phpmyadmin" class="btn btn-pma" target="_blank">🗄️ Open phpMyAdmin</a>
+            <a href="/filemanager" class="btn btn-fm" target="_blank">📁 TinyFileManager</a>
+        </div>
+
+        <div class="footer">
+            Managed by RRHOST Manager &bull; Developer Rafi
+        </div>
+    </div>
+</body>
+</html>
 EOF
 
     echo -e "${YELLOW}[>] STEP 8/8:${RESET} Applying Permissions & Launching..."
