@@ -354,4 +354,4 @@ case $CHOICE in
         echo -e "${RED}[!] Invalid option selected.${RESET}"
         exit 1
         ;;
-es:
+esac
